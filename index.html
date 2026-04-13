@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Линденфорд: Турист</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        :root {
+            --primary: #a855f7;
+            --accent: #6366f1;
+            --marker-color: #f59e0b;
+            --marker-glow: rgba(245, 158, 11, 0.5);
+            --bg-gradient: linear-gradient(135deg, #7c3aed, #6366f1, #a855f7);
+            --theme-transition: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        body.theme-positive {
+            --primary: #10b981; --accent: #06b6d4; --marker-color: #34d399;
+            --marker-glow: rgba(52, 211, 153, 0.6);
+            --bg-gradient: linear-gradient(135deg, #059669, #0891b2, #10b981);
+        }
+        body.theme-negative {
+            --primary: #dc2626; --accent: #4b5563; --marker-color: #6b7280;
+            --marker-glow: rgba(107, 114, 128, 0.5);
+            --bg-gradient: linear-gradient(135deg, #991b1b, #4b5563, #dc2626);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a1a; color: #fff;
+            height: 100vh; height: 100dvh; width: 100vw;
+            overflow: hidden; overscroll-behavior: none;
+            scrollbar-width: none; -ms-overflow-style: none;
+            touch-action: none;
+        }
+        body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+        #map { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; transition: cursor 0.2s; }
+        #map.setting-mode { cursor: crosshair !important; }
+        #map.marking-mode { cursor: cell !important; }
+
+        .top-bar {
+            position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
+            background: linear-gradient(135deg, rgba(15,15,35,0.95), rgba(30,10,50,0.95));
+            backdrop-filter: blur(20px); padding: 20px 12px 12px;
+            border-bottom: 1px solid var(--primary); opacity: 0.95;
+            transition: border-color var(--theme-transition);
+            padding-top: max(20px, env(safe-area-inset-top));
+        }
+        .top-bar h1 {
+            font-size: 16px; text-align: center;
+            background: var(--bg-gradient); -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent; background-clip: text;
+            letter-spacing: 1px; transition: background var(--theme-transition);
+        }
+        .top-bar .subtitle { text-align: center; font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+        .bottom-panel {
+            position: absolute; bottom: 0; left: 0; right: 0; z-index: 1000;
+            background: linear-gradient(135deg, rgba(15,15,35,0.97), rgba(30,10,50,0.97));
+            backdrop-filter: blur(20px); border-top: 1px solid var(--primary);
+            border-radius: 24px 24px 0 0; padding: 18px 16px;
+            padding-bottom: max(25px, env(safe-area-inset-bottom));
+            transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), border-color var(--theme-transition);
+            max-height: 70vh; overflow-y: auto;
+            touch-action: pan-y;
+        }
+        .bottom-panel.collapsed { transform: translateY(calc(100% - 60px)); }
+        .panel-toggle {
+            width: 50px; height: 5px; background: rgba(255,255,255,0.3);
+            border-radius: 3px; margin: 0 auto 16px; cursor: pointer;
+            transition: background 0.3s;
+        }
+        .panel-toggle:hover { background: rgba(255,255,255,0.5); }
+
+        .radius-control { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .radius-control label { font-size: 13px; color: rgba(255,255,255,0.7); white-space: nowrap; }
+        .radius-slider {
+            flex: 1; -webkit-appearance: none; appearance: none;
+            height: 6px; border-radius: 3px; background: var(--bg-gradient); outline: none;
+            transition: background var(--theme-transition);
+        }
+        .radius-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 22px; height: 22px;
+            border-radius: 50%; background: var(--primary); cursor: pointer;
+            box-shadow: 0 0 10px var(--primary); transition: box-shadow var(--theme-transition);
+        }
+        .radius-value { font-size: 14px; font-weight: 700; color: var(--primary); min-width: 50px; text-align: right; }
+
+        .mode-selector { display: flex; gap: 8px; margin-bottom: 14px; }
+        .mode-btn {
+            flex: 1; padding: 10px 6px; border: 1px solid rgba(138,43,226,0.3); border-radius: 10px;
+            background: rgba(138,43,226,0.1); color: rgba(255,255,255,0.7); font-size: 12px;
+            cursor: pointer; transition: all 0.3s; text-align: center;
+        }
+        .mode-btn.active {
+            background: var(--bg-gradient); border-color: var(--primary); color: #fff;
+            box-shadow: 0 0 12px var(--primary); transition: background var(--theme-transition), box-shadow var(--theme-transition);
+        }
+
+        .generate-btn {
+            width: 100%; padding: 14px; border: none; border-radius: 14px;
+            background: var(--bg-gradient); color: #fff; font-size: 16px; font-weight: 700;
+            cursor: pointer; letter-spacing: 1px; transition: all 0.3s;
+            box-shadow: 0 4px 15px var(--primary); position: relative; overflow: hidden;
+            transition: background var(--theme-transition), box-shadow var(--theme-transition);
+        }
+        .generate-btn::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); transition: left 0.5s;
+        }
+        .generate-btn:hover::before { left: 100%; }
+        .generate-btn:active { transform: scale(0.97); }
+        .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .point-info {
+            display: none; margin-top: 14px; padding: 14px;
+            background: rgba(138,43,226,0.1); border: 1px solid var(--primary);
+            border-radius: 14px; transition: border-color var(--theme-transition);
+        }
+        .point-info.visible { display: block; animation: slideUp 0.4s ease; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        .point-info .distance {
+            font-size: 24px; font-weight: 800;
+            background: var(--bg-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            transition: background var(--theme-transition);
+        }
+        .point-info .direction { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+        .point-info .coords { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 6px; font-family: monospace; }
+        .navigate-btn {
+            display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 9px 16px;
+            border: 1px solid var(--accent); border-radius: 10px; background: rgba(99,102,241,0.15);
+            color: #818cf8; font-size: 13px; cursor: pointer; transition: all 0.3s; text-decoration: none;
+        }
+
+        .route-actions { display: none; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+        .route-actions.visible { display: flex; }
+        .action-btn {
+            flex: 1; padding: 11px; border: none; border-radius: 10px; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; color: #fff; min-width: 80px;
+        }
+        .action-btn.completed { background: #10b981; }
+        .action-btn.started { background: #f59e0b; color: #000; }
+        .action-btn.cancel { background: #ef4444; }
+        .action-btn:active { transform: scale(0.96); opacity: 0.8; }
+
+        .map-controls { 
+            position: absolute; 
+            top: 90px; 
+            right: 12px; 
+            z-index: 999; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 10px; 
+        }
+        .map-btn {
+            width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--primary);
+            background: rgba(15,15,35,0.9); backdrop-filter: blur(10px); color: var(--primary);
+            font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s, border-color var(--theme-transition), color var(--theme-transition);
+        }
+        .map-btn:hover { background: rgba(138,43,226,0.3); box-shadow: 0 0 15px var(--primary); }
+        .map-btn.active-mode { background: rgba(245,158,11,0.3); border-color: #f59e0b; color: #f59e0b; }
+
+        .scanning-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2000;
+            background: rgba(10,10,26,0.9); backdrop-filter: blur(10px);
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        .scanning-overlay.visible { display: flex; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .scanner-ring {
+            width: 100px; height: 100px; border-radius: 50%;
+            border: 3px solid transparent; border-top-color: var(--primary); border-right-color: var(--accent);
+            animation: spin 1s linear infinite; position: relative; transition: border-color var(--theme-transition);
+        }
+        .scanner-ring::before {
+            content: ''; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px; border-radius: 50%;
+            border: 3px solid transparent; border-bottom-color: var(--primary); border-left-color: var(--accent);
+            animation: spin 0.7s linear infinite reverse;
+        }
+        .scanner-ring::after { 
+            content: '?'; 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            font-size: 40px; 
+            font-weight: bold;
+            color: var(--primary);
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .scanning-text { margin-top: 20px; font-size: 14px; color: rgba(255,255,255,0.6); letter-spacing: 2px; }
+        .scanning-subtext { margin-top: 6px; font-size: 11px; color: rgba(255,255,255,0.3); }
+
+        .intention-input {
+            width: 100%; padding: 11px 14px; border: 1px solid var(--primary); border-radius: 10px;
+            background: rgba(138,43,226,0.08); color: #fff; font-size: 13px; margin-bottom: 14px;
+            outline: none; transition: border-color 0.3s, border-color var(--theme-transition);
+        }
+        .intention-input::placeholder { color: rgba(255,255,255,0.3); }
+        .intention-input:focus { border-color: var(--primary); }
+
+        .counter { display: flex; justify-content: center; gap: 18px; margin-bottom: 14px; }
+        .counter-item { text-align: center; }
+        .counter-item .num { font-size: 20px; font-weight: 800; color: var(--primary); transition: color var(--theme-transition); }
+        .counter-item .label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+
+        .toast {
+            position: fixed; top: 85px; left: 50%; transform: translateX(-50%) translateY(-20px); z-index: 3000;
+            background: rgba(15,15,35,0.95); backdrop-filter: blur(20px); border: 1px solid var(--primary);
+            padding: 10px 20px; border-radius: 10px; font-size: 13px;
+            transition: transform 0.4s cubic-bezier(0.4,0,0.2,1), border-color var(--theme-transition); white-space: nowrap; opacity: 0;
+        }
+        .toast.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        .pulse-marker { width: 20px; height: 20px; border-radius: 50%; background: var(--primary); position: relative; transition: background var(--theme-transition); }
+        .pulse-marker::before {
+            content: ''; position: absolute; top: -8px; left: -8px; right: -8px; bottom: -8px; border-radius: 50%;
+            border: 2px solid var(--primary); animation: pulse 2s ease-out infinite; transition: border-color var(--theme-transition);
+        }
+        @keyframes pulse { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+
+        .target-marker-wrap { width: 0; height: 0; position: relative; }
+        .target-pin {
+            position: absolute; top: -30px; left: -15px; width: 30px; height: 30px;
+            background: radial-gradient(circle at 30% 30%, var(--marker-color, #f59e0b), #ef4444);
+            border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+            box-shadow: 0 0 15px var(--marker-glow, rgba(245,158,11,0.5));
+            animation: pinBounce 1s ease infinite; transition: background var(--theme-transition), box-shadow var(--theme-transition);
+        }
+        @keyframes pinBounce { 0%, 100% { transform: rotate(-45deg) translateY(0); } 50% { transform: rotate(-45deg) translateY(-6px); } }
+
+        .leaflet-control-zoom { display: none !important; }
+        .leaflet-control-attribution { background: rgba(15,15,35,0.7) !important; color: rgba(255,255,255,0.3) !important; font-size: 9px !important; }
+        .leaflet-control-attribution a { color: rgba(255,255,255,0.4) !important; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div class="top-bar">
+        <h1>ЛИНДЕНФОРД: ТУРИСТ</h1>
+        <div class="subtitle">Создано в Шорстовской лаборатории</div>
+    </div>
+
+    <div class="map-controls">
+        <button class="map-btn" id="setLocationBtn" onclick="toggleSetLocationMode()" title="Отметить старт">?</button>
+        <button class="map-btn" onclick="zoomIn()">+</button>
+        <button class="map-btn" onclick="zoomOut()">-</button>
+    </div>
+
+    <div class="scanning-overlay" id="scanningOverlay">
+        <div class="scanner-ring"></div>
+        <div class="scanning-text">СКАНИРОВАНИЕ</div>
+        <div class="scanning-subtext" id="scanningSubtext">Генерация координат...</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="bottom-panel" id="bottomPanel">
+        <div class="panel-toggle" onclick="togglePanel()"></div>
+
+        <div class="counter">
+            <div class="counter-item"><div class="num" id="tripCount">0</div><div class="label">Маршрутов</div></div>
+            <div class="counter-item"><div class="num" id="totalDistance">0.0</div><div class="label">км пройдено</div></div>
+        </div>
+
+        <input type="text" class="intention-input" id="intentionInput" placeholder="Запрос во вселенную">
+
+        <div class="radius-control">
+            <label>Радиус:</label>
+            <input type="range" class="radius-slider" id="radiusSlider" min="200" max="10000" step="100" value="3000">
+            <span class="radius-value" id="radiusValue">3 км</span>
+        </div>
+
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="random" onclick="setMode(this)">Рандом</button>
+            <button class="mode-btn" data-mode="attractor" onclick="setMode(this)">Аттрактор</button>
+            <button class="mode-btn" data-mode="void" onclick="setMode(this)">Войд</button>
+        </div>
+
+        <button class="generate-btn" id="generateBtn" onclick="generatePoint()" disabled>
+            Сначала отметьте старт
+        </button>
+
+        <div class="point-info" id="pointInfo">
+            <div class="distance" id="distanceValue">—</div>
+            <div class="direction" id="directionValue">
+    <span id="directionText">Направление</span>
+</div>
+            </div>
+            <div class="coords" id="coordsValue">—</div>
+            <a class="navigate-btn" id="navigateLink" href="#" target="_blank">Открыть в картах</a>
+        </div>
+
+        <div class="route-actions" id="routeActions">
+            <button class="action-btn completed" onclick="markCompleted()">Пройден</button>
+            <button class="action-btn started" onclick="startPartial()">Прерван</button>
+            <button class="action-btn cancel" onclick="cancelRoute()">Отменить</button>
+        </div>
+    </div>
+
+    <script>
+        // ── Инициализация данных из localStorage ──
+        let tripCount = parseInt(localStorage.getItem('lf_tripCount') || '0');
+        let totalKm = parseFloat(localStorage.getItem('lf_totalKm') || '0');
+        document.getElementById('tripCount').textContent = tripCount;
+        document.getElementById('totalDistance').textContent = totalKm.toFixed(1);
+
+        function saveData() {
+            localStorage.setItem('lf_tripCount', tripCount);
+            localStorage.setItem('lf_totalKm', totalKm);
+            document.getElementById('tripCount').textContent = tripCount;
+            document.getElementById('totalDistance').textContent = totalKm.toFixed(1);
+        }
+
+        // ── Карта ──
+        const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([50.0, 40.0], 5);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OSM © CARTO', subdomains: 'abcd', maxZoom: 19
+        }).addTo(map);
+
+        // ── Состояние ──
+        let userLat = null, userLng = null;
+        let targetLat = null, targetLng = null;
+        let userMarker = null, targetMarker = null;
+        let routeLine = null, radiusCircle = null;
+        let currentMode = 'random';
+        let routeDistance = 0;
+        let isSettingLocation = false, isMarkingEndpoint = false, generated = false;
+        let panelOpen = true;
+
+        // ── Свайп для открытия/закрытия панели ──
+        let touchStartY = 0;
+        let touchEndY = 0;
+        const bottomPanel = document.getElementById('bottomPanel');
+
+        bottomPanel.addEventListener('touchstart', function(e) {
+            touchStartY = e.changedTouches[0].screenY;
+        }, {passive: true});
+
+        bottomPanel.addEventListener('touchend', function(e) {
+            touchEndY = e.changedTouches[0].screenY;
+            handleSwipe();
+        }, {passive: true});
+
+        function handleSwipe() {
+            const swipeThreshold = 50;
+            const diff = touchStartY - touchEndY;
+            
+            if (Math.abs(diff) > swipeThreshold) {
+                if (diff > 0 && !panelOpen) {
+                    // Свайп вверх - открыть
+                    bottomPanel.classList.remove('collapsed');
+                    panelOpen = true;
+                } else if (diff < 0 && panelOpen) {
+                    // Свайп вниз - закрыть
+                    bottomPanel.classList.add('collapsed');
+                    panelOpen = false;
+                }
+            }
+        }
+
+        // ── Seeded PRNG ──
+        function mulberry32(seed) {
+            return function() {
+                seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+                let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+                t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+        function hashIntention(str) {
+            let h = 0;
+            for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i);
+            return Math.abs(h | 0);
+        }
+
+        // ── Детекция тона ──
+        const toneKeywords = {
+            positive: ['радость', 'любовь', 'свет', 'добро', 'чудо', 'знак', 'счастье', 'позитив', 'мир', 'надежда', 'hope', 'love', 'joy', 'light', 'wonder', 'good', 'peace', 'вдохновение', 'красота', 'гармония', 'открытие'],
+            negative: ['страх', 'тьма', 'зло', 'мрак', 'ужас', 'потеря', 'грусть', 'боль', 'fear', 'dark', 'evil', 'sad', 'lost', 'pain', 'doom', 'тревога', 'опасность', 'смерть', 'пустота', 'одиночество']
+        };
+        function detectTone(text) {
+            const t = text.toLowerCase();
+            let pos = 0, neg = 0;
+            toneKeywords.positive.forEach(w => { if (t.includes(w)) pos++; });
+            toneKeywords.negative.forEach(w => { if (t.includes(w)) neg++; });
+            return pos > neg ? 'positive' : neg > pos ? 'negative' : 'neutral';
+        }
+        function applyTone(tone) {
+            document.body.classList.remove('theme-positive', 'theme-negative');
+            if (tone !== 'neutral') document.body.classList.add(`theme-${tone}`);
+            const msg = tone === 'neutral' ? 'Нейтральный фильтр' : tone === 'positive' ? 'Позитивный фильтр' : 'Тёмный фильтр';
+            showToast(msg);
+        }
+
+        // ── Управление картой ──
+        map.on('click', function(e) {
+            if (isSettingLocation) setUserLocation(e.latlng.lat, e.latlng.lng);
+            else if (isMarkingEndpoint) markEndpoint(e.latlng.lat, e.latlng.lng);
+        });
+
+        function toggleSetLocationMode() {
+            isSettingLocation = !isSettingLocation;
+            const btn = document.getElementById('setLocationBtn');
+            const mapEl = document.getElementById('map');
+            if (isSettingLocation) {
+                mapEl.classList.add('setting-mode'); btn.classList.add('active-mode');
+                showToast('Кликните на карте, чтобы отметить старт');
+            } else { mapEl.classList.remove('setting-mode'); btn.classList.remove('active-mode'); }
+        }
+
+        function setUserLocation(lat, lng) {
+            userLat = lat; userLng = lng;
+            isSettingLocation = false;
+            document.getElementById('map').classList.remove('setting-mode');
+            document.getElementById('setLocationBtn').classList.remove('active-mode');
+            updateUserMarker();
+            const genBtn = document.getElementById('generateBtn');
+            genBtn.disabled = false; genBtn.innerHTML = 'СГЕНЕРИРОВАТЬ ТОЧКУ';
+            showToast('Стартовая точка установлена');
+            if (generated && targetLat !== null) {
+                updateDirection(); updateRoute();
+                map.fitBounds(L.featureGroup([userMarker, targetMarker]).getBounds().pad(0.2));
+            }
+        }
+
+        function updateUserMarker() {
+            if (userMarker) userMarker.setLatLng([userLat, userLng]);
+            else {
+                userMarker = L.marker([userLat, userLng], {
+                    icon: L.divIcon({ className: 'pulse-marker', iconSize: [20,20], iconAnchor: [10,10] })
+                }).addTo(map).bindPopup('Ваш старт');
+            }
+        }
+
+        // ── Генерация ──
+        function generatePoint() {
+            if (userLat === null) { showToast('Сначала отметьте старт'); return; }
+            const intention = document.getElementById('intentionInput').value.trim();
+            let rng = Math.random;
+            if (intention) { rng = mulberry32(hashIntention(intention)); applyTone(detectTone(intention)); }
+            else applyTone('neutral');
+
+            const radius = parseInt(document.getElementById('radiusSlider').value);
+            const overlay = document.getElementById('scanningOverlay'); overlay.classList.add('visible');
+            const phrases = ['Генерация координат...', 'Сканирование пространства...', 'Квантовая флуктуация...', 'Вычисление пути...', 'Связь с локацией...'];
+            let idx = 0;
+            const phrInt = setInterval(() => { idx = (idx + 1) % phrases.length; document.getElementById('scanningSubtext').textContent = phrases[idx]; }, 700);
+
+            setTimeout(() => {
+                clearInterval(phrInt); overlay.classList.remove('visible');
+                const rDeg = radius / 111000, u = rng(), v = rng();
+                const w = rDeg * Math.sqrt(u), t = 2 * Math.PI * v;
+                const x = w * Math.cos(t), y = w * Math.sin(t);
+                let nLat = userLat + y, nLng = userLng + x / Math.cos(userLat * Math.PI / 180);
+                if (currentMode === 'attractor') { nLat = (userLat + nLat)/2 + (rng()-0.5)*0.0005; nLng = (userLng + nLng)/2 + (rng()-0.5)*0.0005; }
+                targetLat = nLat; targetLng = nLng;
+                routeDistance = getDistance(userLat, userLng, targetLat, targetLng);
+                generated = true; tripCount++;
+                saveData(); showTarget(); showToast('Цель найдена! В путь!');
+            }, 1800 + Math.random()*1000);
+        }
+
+        function showTarget() {
+            if (targetMarker) map.removeLayer(targetMarker);
+            if (routeLine) map.removeLayer(routeLine);
+            if (radiusCircle) map.removeLayer(radiusCircle);
+            const targetIcon = L.divIcon({ className: 'target-marker-wrap', html: '<div class="target-pin"></div>', iconSize: [30,30], iconAnchor: [15,30] });
+            targetMarker = L.marker([targetLat, targetLng], { icon: targetIcon }).addTo(map).bindPopup('Целевая точка');
+            routeLine = L.polyline([[userLat, userLng], [targetLat, targetLng]], { color: 'var(--primary)', weight: 3, opacity: 0.6, dashArray: '10, 10' }).addTo(map);
+            radiusCircle = L.circle([userLat, userLng], { radius: parseInt(document.getElementById('radiusSlider').value), color: 'var(--primary)', fillColor: 'var(--primary)', fillOpacity: 0.05, weight: 1, opacity: 0.3 }).addTo(map);
+            updateDirection();
+            document.getElementById('pointInfo').classList.add('visible');
+            document.getElementById('routeActions').classList.add('visible');
+            document.getElementById('navigateLink').href = `https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}`;
+            map.fitBounds(L.featureGroup([userMarker, targetMarker]).getBounds().pad(0.2));
+        }
+
+        function updateDirection() {
+            const dist = routeDistance, bearing = getBearing(userLat, userLng, targetLat, targetLng);
+            const dirText = getDirectionName(bearing);
+            document.getElementById('distanceValue').textContent = dist < 1000 ? `${Math.round(dist)} м` : `${(dist/1000).toFixed(2)} км`;
+            document.getElementById('directionText').textContent = `${dirText} • ${bearing.toFixed(0)}°`;
+            document.getElementById('coordsValue').textContent = `${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}`;
+           
+        }
+        function updateRoute() { if (routeLine) routeLine.setLatLngs([[userLat, userLng], [targetLat, targetLng]]); }
+
+        // ── Управление маршрутом ──
+        function markCompleted() {
+            totalKm += routeDistance / 1000;
+            saveData(); cleanupRouteUI();
+            showToast('Маршрут пройден! +' + (routeDistance/1000).toFixed(2) + ' км');
+        }
+        function startPartial() {
+            isMarkingEndpoint = true;
+            document.getElementById('map').classList.add('marking-mode');
+            document.getElementById('routeActions').classList.remove('visible');
+            showToast('Кликните на карте, где вы остановились');
+        }
+        function markEndpoint(lat, lng) {
+            isMarkingEndpoint = false;
+            document.getElementById('map').classList.remove('marking-mode');
+            const dist = getDistance(userLat, userLng, lat, lng);
+            totalKm += dist / 1000;
+            saveData(); cleanupRouteUI();
+            showToast('Засчитано: ' + (dist/1000).toFixed(2) + ' км');
+        }
+        function cancelRoute() {
+            cleanupRouteUI(); tripCount = Math.max(0, tripCount - 1);
+            saveData(); showToast('Маршрут отменён');
+        }
+        function cleanupRouteUI() {
+            if (targetMarker) map.removeLayer(targetMarker);
+            if (routeLine) map.removeLayer(routeLine);
+            if (radiusCircle) map.removeLayer(radiusCircle);
+            targetLat = null; targetLng = null; generated = false;
+            document.getElementById('pointInfo').classList.remove('visible');
+            document.getElementById('routeActions').classList.remove('visible');
+        }
+
+        // ── Управление панелью ──
+        function togglePanel() {
+            panelOpen = !panelOpen;
+            if (panelOpen) {
+                bottomPanel.classList.remove('collapsed');
+            } else {
+                bottomPanel.classList.add('collapsed');
+            }
+        }
+
+        // ── Утилиты ──
+        function getDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+        function getBearing(lat1, lng1, lat2, lng2) {
+            const dLng = (lng2-lng1)*Math.PI/180;
+            const y = Math.sin(dLng)*Math.cos(lat2*Math.PI/180);
+            const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180) - Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLng);
+            return ((Math.atan2(y,x)*180/Math.PI)+360)%360;
+        }
+        function getDirectionName(b) { return ['С','СВ','В','ЮВ','Ю','ЮЗ','З','СЗ'][Math.round(b/45)%8]; }
+        function setMode(btn) { document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); currentMode = btn.dataset.mode; }
+        function zoomIn() { map.zoomIn(); } function zoomOut() { map.zoomOut(); }
+        
+        function showToast(msg) {
+            const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('visible');
+            setTimeout(() => t.classList.remove('visible'), 3000);
+        }
+        document.getElementById('radiusSlider').addEventListener('input', function() { 
+            const v = parseInt(this.value); 
+            document.getElementById('radiusValue').textContent = v >= 1000 ? `${(v/1000).toFixed(1)} км` : `${v} м`; 
+            if (radiusCircle) radiusCircle.setRadius(v); 
+        });
+
+        showToast('Нажмите ?, затем кликните на карте, чтобы начать');
+    </script>
+</body>
+</html>
