@@ -136,16 +136,45 @@
             color: #818cf8; font-size: 13px; cursor: pointer; transition: all 0.3s; text-decoration: none;
         }
 
-        .route-actions { display: none; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-        .route-actions.visible { display: flex; }
-        .action-btn {
-            flex: 1; padding: 11px; border: none; border-radius: 10px; font-size: 13px; font-weight: 600;
-            cursor: pointer; transition: all 0.2s; color: #fff; min-width: 80px;
+        /* КНОПКИ МАРШРУТА - ИСПРАВЛЕНО */
+        .route-actions { 
+            display: none; 
+            gap: 10px; 
+            margin-top: 14px; 
+            padding-top: 14px;
+            border-top: 1px solid rgba(138,43,226,0.2);
+            flex-wrap: wrap; 
         }
-        .action-btn.completed { background: #10b981; }
-        .action-btn.started { background: #f59e0b; color: #000; }
-        .action-btn.cancel { background: #ef4444; }
-        .action-btn:active { transform: scale(0.96); opacity: 0.8; }
+        .route-actions.visible { display: flex !important; }
+        .action-btn {
+            flex: 1; 
+            padding: 12px 8px; 
+            border: none; 
+            border-radius: 10px; 
+            font-size: 14px; 
+            font-weight: 700;
+            cursor: pointer; 
+            transition: all 0.2s; 
+            min-width: 90px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .action-btn.completed { 
+            background: linear-gradient(135deg, #059669, #10b981); 
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+        }
+        .action-btn.started { 
+            background: linear-gradient(135deg, #d97706, #f59e0b); 
+            color: #000;
+            box-shadow: 0 2px 10px rgba(245, 158, 11, 0.3);
+        }
+        .action-btn.cancel { 
+            background: linear-gradient(135deg, #dc2626, #ef4444); 
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(239, 68, 68, 0.3);
+        }
+        .action-btn:active { transform: scale(0.96); opacity: 0.9; }
 
         .map-controls { 
             position: absolute; 
@@ -245,7 +274,7 @@
 
     <div class="top-bar">
         <h1>ЛИНДЕНФОРД: ТУРИСТ</h1>
-        <div class="subtitle">Создано в Шорстовской лаборатории</div>
+        <div class="subtitle">Придонская разработка</div>
     </div>
 
     <div class="map-controls">
@@ -291,17 +320,17 @@
         <div class="point-info" id="pointInfo">
             <div class="distance" id="distanceValue">—</div>
             <div class="direction" id="directionValue">
-    <span id="directionText">Направление</span>
-</div>
+                <span id="directionText">Направление</span>
             </div>
             <div class="coords" id="coordsValue">—</div>
             <a class="navigate-btn" id="navigateLink" href="#" target="_blank">Открыть в картах</a>
         </div>
 
+        <!-- КНОПКИ МАРШРУТА - ИСПРАВЛЕНО -->
         <div class="route-actions" id="routeActions">
             <button class="action-btn completed" onclick="markCompleted()">Пройден</button>
             <button class="action-btn started" onclick="startPartial()">Прерван</button>
-            <button class="action-btn cancel" onclick="cancelRoute()">Отменить</button>
+            <button class="action-btn cancel" onclick="cancelRoute()">Отменён</button>
         </div>
     </div>
 
@@ -355,11 +384,9 @@
             
             if (Math.abs(diff) > swipeThreshold) {
                 if (diff > 0 && !panelOpen) {
-                    // Свайп вверх - открыть
                     bottomPanel.classList.remove('collapsed');
                     panelOpen = true;
                 } else if (diff < 0 && panelOpen) {
-                    // Свайп вниз - закрыть
                     bottomPanel.classList.add('collapsed');
                     panelOpen = false;
                 }
@@ -468,6 +495,7 @@
             }, 1800 + Math.random()*1000);
         }
 
+        // ── ПОКАЗ ЦЕЛИ - ИСПРАВЛЕНО: добавлено отображение кнопок ──
         function showTarget() {
             if (targetMarker) map.removeLayer(targetMarker);
             if (routeLine) map.removeLayer(routeLine);
@@ -478,6 +506,7 @@
             radiusCircle = L.circle([userLat, userLng], { radius: parseInt(document.getElementById('radiusSlider').value), color: 'var(--primary)', fillColor: 'var(--primary)', fillOpacity: 0.05, weight: 1, opacity: 0.3 }).addTo(map);
             updateDirection();
             document.getElementById('pointInfo').classList.add('visible');
+            // ИСПРАВЛЕНО: показываем кнопки маршрута
             document.getElementById('routeActions').classList.add('visible');
             document.getElementById('navigateLink').href = `https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}`;
             map.fitBounds(L.featureGroup([userMarker, targetMarker]).getBounds().pad(0.2));
@@ -489,11 +518,10 @@
             document.getElementById('distanceValue').textContent = dist < 1000 ? `${Math.round(dist)} м` : `${(dist/1000).toFixed(2)} км`;
             document.getElementById('directionText').textContent = `${dirText} • ${bearing.toFixed(0)}°`;
             document.getElementById('coordsValue').textContent = `${targetLat.toFixed(6)}, ${targetLng.toFixed(6)}`;
-           
         }
         function updateRoute() { if (routeLine) routeLine.setLatLngs([[userLat, userLng], [targetLat, targetLng]]); }
 
-        // ── Управление маршрутом ──
+        // ── УПРАВЛЕНИЕ МАРШРУТОМ - ИСПРАВЛЕНО: восстановлены все функции ──
         function markCompleted() {
             totalKm += routeDistance / 1000;
             saveData(); cleanupRouteUI();
