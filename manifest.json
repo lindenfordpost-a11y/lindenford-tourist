@@ -2,7 +2,7 @@
   "name": "Линденфорд: Турист",
   "short_name": "Турист",
   "description": "Приложение для случайных путешествий по карте",
-  "start_url": "/index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0a1a",
   "theme_color": "#0a0a1a",
